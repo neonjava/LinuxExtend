@@ -217,6 +217,9 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = proto + '//' + location.host + '/ws/screen';
 
+            ws = new WebSocket(wsUrl);
+            ws.binaryType = 'blob';
+
             ws.onopen = () => {
                 if (statusDot) statusDot.className = 'dot connected';
                 overlay.style.display = 'none';

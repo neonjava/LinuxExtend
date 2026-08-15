@@ -95,7 +95,7 @@ class VirtualDisplay:
         return None
 
     def create(self) -> str:
-        """Create a new headless virtual display.
+        """Create a new headless virtual display without overlap.
 
         Returns the output name (e.g. 'HEADLESS-4').
         """
@@ -104,6 +104,13 @@ class VirtualDisplay:
 
         # Snapshot current headless outputs
         before = self._get_headless_names()
+
+        # Calculate target position in advance to prevent initial 0x0 overlap
+        pos_str = self._calc_position()
+        self._run_hyprctl(
+            "keyword", "monitor",
+            f"HEADLESS-*,{self.resolution}@{self.refresh_rate},{pos_str},1"
+        )
 
         # Create the headless output
         result = self._run_hyprctl("output", "create", "headless")
@@ -126,10 +133,21 @@ class VirtualDisplay:
         self._created = True
         logger.info("Created headless output: %s", self.name)
 
-        # Configure resolution and position
+        # Apply specific monitor configuration
         self._configure()
 
         return self.name
+
+    def _calc_position(self) -> str:
+        """Calculate the target monitor position string."""
+        if self.position == "auto":
+            primary = self._get_primary_monitor()
+            if primary:
+                pos_x = primary["x"] + primary["width"]
+                pos_y = primary["y"]
+                return f"{pos_x}x{pos_y}"
+            return "1920x0"
+        return self.position
 
     def _configure(self) -> None:
         """Configure the resolution, refresh rate, and position of the virtual display."""
