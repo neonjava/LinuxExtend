@@ -299,20 +299,20 @@ async def screen_stream(websocket: WebSocket) -> None:
     logger.info("Client connected: %s (total: %d)", client_id, len(_connected_clients))
 
     try:
-        frame_interval = capture_engine.frame_interval if capture_engine else 0.04
-        last_frame: bytes | None = None
+        frame_interval = capture_engine.frame_interval if capture_engine else 0.033
+        client_last_frame_id = -1
 
         while True:
             if capture_engine is None:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
                 continue
 
-            frame = capture_engine.get_frame()
+            frame, frame_id = capture_engine.get_frame_with_id()
 
-            # Only send if we have a new frame (avoid duplicate sends)
-            if frame is not None and frame is not last_frame:
+            # Send if we have a frame and it is newer than the last sent to this client
+            if frame is not None and frame_id != client_last_frame_id:
                 await websocket.send_bytes(frame)
-                last_frame = frame
+                client_last_frame_id = frame_id
 
             await asyncio.sleep(frame_interval)
 

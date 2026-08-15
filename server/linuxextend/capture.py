@@ -48,6 +48,7 @@ class ScreenCapture:
 
         # Thread-safe latest frame storage
         self._latest_frame: bytes | None = None
+        self._frame_id: int = 0
         self._lock = threading.Lock()
 
         # Capture thread control
@@ -56,6 +57,7 @@ class ScreenCapture:
 
         # Dirty frame detection
         self._prev_hash: str | None = None
+        self._static_frame_count: int = 0
 
         # FPS tracking
         self._frame_count = 0
@@ -228,10 +230,10 @@ class ScreenCapture:
                             time.sleep(sleep_time)
                         continue
 
-                    self._prev_hash = sample_hash
-
+                    # Store latest frame
                     with self._lock:
                         self._latest_frame = jpg_bytes
+                        self._frame_id += 1
 
                     self._update_fps()
                 except Exception as e:
@@ -262,8 +264,11 @@ class ScreenCapture:
                     time.sleep(self.frame_interval)
                     continue
 
-                # Skip encoding if frame hasn't changed (saves CPU)
-                if not self._is_frame_dirty(img):
+                # Skip encoding if frame hasn't changed unless heartbeat
+                is_dirty = self._is_frame_dirty(img)
+                self._static_frame_count = 0 if is_dirty else self._static_frame_count + 1
+
+                if not is_dirty and self._static_frame_count % 10 != 0 and self._latest_frame is not None:
                     elapsed = time.monotonic() - t0
                     sleep_time = max(0.0, self.frame_interval - elapsed)
                     time.sleep(sleep_time)
@@ -280,6 +285,7 @@ class ScreenCapture:
                 # Store the latest frame
                 with self._lock:
                     self._latest_frame = jpg_bytes
+                    self._frame_id += 1
 
                 self._update_fps()
 
@@ -315,6 +321,11 @@ class ScreenCapture:
         """Get the latest JPEG frame bytes (thread-safe)."""
         with self._lock:
             return self._latest_frame
+
+    def get_frame_with_id(self) -> tuple[bytes | None, int]:
+        """Get the latest JPEG frame bytes and monotonic frame counter."""
+        with self._lock:
+            return self._latest_frame, self._frame_id
 
     @property
     def actual_fps(self) -> float:

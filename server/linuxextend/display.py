@@ -155,9 +155,13 @@ class VirtualDisplay:
         if self.position == "auto":
             primary = self._get_primary_monitor()
             if primary:
-                pos_x = primary["x"] + primary["width"]
-                pos_y = primary["y"]
-                return f"{pos_x}x{pos_y}"
+                # Lock primary monitor at 0x0
+                p_name = primary.get("name", "eDP-1")
+                p_w = primary.get("width", 1920)
+                p_h = primary.get("height", 1080)
+                p_r = int(primary.get("refreshRate", 144))
+                self._run_hyprctl("keyword", "monitor", f"{p_name},{p_w}x{p_h}@{p_r},0x0,1")
+                return f"{p_w}x0"
             return "1920x0"
         return self.position
 
@@ -166,21 +170,9 @@ class VirtualDisplay:
         if not self.name:
             return
 
-        # Determine position
-        if self.position == "auto":
-            primary = self._get_primary_monitor()
-            if primary:
-                # Place to the right of the primary monitor
-                pos_x = primary["x"] + primary["width"]
-                pos_y = primary["y"]
-                position_str = f"{pos_x}x{pos_y}"
-            else:
-                position_str = "0x0"
-        else:
-            position_str = self.position
+        position_str = self._calc_position()
 
         # Apply monitor configuration
-        # Format: hyprctl keyword monitor NAME,WxH@R,POS,SCALE
         monitor_rule = (
             f"{self.name},"
             f"{self.resolution}@{self.refresh_rate},"
