@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.LinuxExtend" parent="android:Theme.Material.NoActionBar" />
+</resources>
