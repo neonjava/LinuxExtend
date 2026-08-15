@@ -148,7 +148,30 @@ class VirtualDisplay:
         # Apply specific monitor configuration
         self._configure()
 
+        # Sync wallpaper to new monitor
+        self._sync_wallpaper()
+
         return self.name
+
+    def _sync_wallpaper(self) -> None:
+        """Sync active desktop wallpaper to the new virtual display."""
+        if not self.name:
+            return
+        try:
+            res = subprocess.run(["swww", "query"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    if "image:" in line:
+                        img_path = line.split("image:")[-1].strip()
+                        subprocess.run(
+                            ["swww", "img", img_path, "-o", self.name, "--transition-type", "none"],
+                            capture_output=True,
+                            timeout=3,
+                        )
+                        logger.info("Synced wallpaper to %s: %s", self.name, img_path)
+                        return
+        except Exception as e:
+            logger.debug("Wallpaper sync skipped: %s", e)
 
     def _calc_position(self) -> str:
         """Calculate the target monitor position string."""

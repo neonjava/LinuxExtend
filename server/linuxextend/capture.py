@@ -202,12 +202,12 @@ class ScreenCapture:
             t0 = time.monotonic()
 
             if self._jpeg is None:
-                # Direct grim JPEG capture mode
+                # Direct multi-worker grim JPEG capture mode (high FPS)
                 try:
                     proc = subprocess.run(
-                        ["grim", "-c", "-o", self.output_name, "-t", "jpeg", "-q", str(self.quality), "-"],
+                        ["grim", "-c", "-o", self.output_name, "-t", "jpeg", "-q", "55", "-"],
                         capture_output=True,
-                        timeout=5,
+                        timeout=3,
                     )
                     if proc.returncode != 0:
                         consecutive_failures += 1
@@ -215,30 +215,21 @@ class ScreenCapture:
                             logger.error("Too many consecutive capture failures (%d)", consecutive_failures)
                             self._running = False
                             break
-                        time.sleep(self.frame_interval)
+                        time.sleep(0.01)
                         continue
 
                     jpg_bytes = proc.stdout
                     consecutive_failures = 0
 
-                    # Dirty check on first 4KB of JPEG data for static screen detection
-                    sample_hash = hashlib.md5(jpg_bytes[:4096]).hexdigest()
-                    if sample_hash == self._prev_hash:
-                        elapsed = time.monotonic() - t0
-                        sleep_time = max(0.0, self.frame_interval - elapsed)
-                        if sleep_time > 0:
-                            time.sleep(sleep_time)
-                        continue
+                    if jpg_bytes:
+                        with self._lock:
+                            self._latest_frame = jpg_bytes
+                            self._frame_id += 1
+                        self._update_fps()
 
-                    # Store latest frame
-                    with self._lock:
-                        self._latest_frame = jpg_bytes
-                        self._frame_id += 1
-
-                    self._update_fps()
                 except Exception as e:
-                    logger.error("Direct capture error: %s", e)
-                    time.sleep(self.frame_interval)
+                    logger.debug("Capture error: %s", e)
+                    time.sleep(0.01)
                     continue
             else:
                 # PPM + TurboJPEG mode
