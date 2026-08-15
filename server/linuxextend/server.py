@@ -217,30 +217,20 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = proto + '//' + location.host + '/ws/screen';
 
-            ws = new WebSocket(wsUrl);
-            ws.binaryType = 'blob';
-
             ws.onopen = () => {
-                statusDot.className = 'dot connected';
-                statusText.textContent = 'Connected';
+                if (statusDot) statusDot.className = 'dot connected';
                 overlay.style.display = 'none';
             };
 
             ws.onmessage = async (event) => {
                 try {
-                    sizeValue.textContent = formatBytes(event.data.size);
-
+                    overlay.style.display = 'none';
                     const bitmap = await createImageBitmap(event.data);
 
                     if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
                         canvas.width = bitmap.width;
                         canvas.height = bitmap.height;
-                        resValue.textContent = bitmap.width + '×' + bitmap.height;
-                        // Use bitmaprenderer for zero-copy if available
-                        ctx = canvas.getContext('bitmaprenderer');
-                        if (!ctx) {
-                            ctx = canvas.getContext('2d');
-                        }
+                        ctx = canvas.getContext('bitmaprenderer') || canvas.getContext('2d');
                     }
 
                     if (ctx.transferFromImageBitmap) {
@@ -258,16 +248,14 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             };
 
             ws.onclose = () => {
-                statusDot.className = 'dot';
-                statusText.textContent = 'Disconnected';
+                if (statusDot) statusDot.className = 'dot';
                 overlay.style.display = '';
-                overlay.querySelector('.msg').textContent = 'Connection lost. Reconnecting...';
-                setTimeout(connect, 2000);
+                overlay.querySelector('.msg').textContent = 'Reconnecting...';
+                setTimeout(connect, 1500);
             };
 
-            ws.onerror = () => {
-                statusDot.className = 'dot error';
-                statusText.textContent = 'Error';
+            ws.onerror = (err) => {
+                if (statusDot) statusDot.className = 'dot error';
             };
         }
 
