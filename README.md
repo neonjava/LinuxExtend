@@ -1,103 +1,115 @@
 # LinuxExtend 🖥️📱
 
-Use your Samsung Galaxy Tab A9+ (or any Android tablet) as a second monitor for your Linux laptop.
+Use your Samsung Galaxy Tab A9+ (or any Android tablet / browser) as a seamless second monitor for Linux.
 
-Built for **Hyprland** (Wayland) on Fedora, but adaptable to other wlroots compositors.
+Built natively for **Hyprland** (Wayland) on Fedora/Arch/Debian, supporting both high-speed **Wi-Fi** and zero-latency **USB** streaming.
 
-## How It Works
+---
+
+## 🌟 Features
+
+- **⚡ Fast Streaming**: Low-latency screen capture via `grim` + JPEG streaming to WebSocket consumers.
+- **📱 1-Tap Immersive Fullscreen**: Borderless edge-to-edge playback with zero UI clutter on the tablet.
+- **🖱️ Full Mouse & Cursor Tracking**: Seamless hardware and software cursor rendering across screens.
+- **🔄 Instant Monitor Switching**: Jump your mouse cursor between laptop and tablet with `SHIFT + TAB` or `ALT + TAB`.
+- **🪟 Instant Window Movement**: Throw any active app window to the tablet with `SUPER + M` or `SUPER + SHIFT + TAB`.
+- **📊 Dual Waybar Support**: Waybar runs simultaneously on both your laptop and tablet screen.
+- **🖼️ Auto Wallpaper Sync**: Automatically detects and mirrors your desktop wallpaper to the virtual tablet monitor via `swww`.
+- **🔍 Zero-Config mDNS Discovery**: Native Android `NsdManager` + Python `zeroconf` discovery over local LAN.
+- **🔌 USB Mode**: Zero-latency ADB reverse port forwarding support.
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌──────────────────────┐          ┌──────────────────────┐
-│   Linux Laptop       │  Wi-Fi   │   Android Tablet     │
-│                      │  or USB  │                      │
-│  Hyprland creates    │ ──────── │  App receives JPEG   │
-│  virtual HEADLESS    │ WebSocket│  frames and renders   │
-│  display → grim      │          │  fullscreen           │
-│  captures → streams  │          │                      │
-└──────────────────────┘          └──────────────────────┘
+┌──────────────────────────────────────┐          ┌──────────────────────────────────────┐
+│       Linux Laptop (Hyprland)        │  Wi-Fi   │     Android Tablet (Tab A9+)         │
+│                                      │  or USB  │                                      │
+│  Hyprland creates HEADLESS display   │ ──────── │  Jetpack Compose / Web Browser       │
+│  → grim captures with cursor (-c)    │WebSocket │  renders hardware RGB bitmap         │
+│  → FastAPI WebSocket server streams  │ (8080)   │  fullscreen at native aspect ratio   │
+└──────────────────────────────────────┘          └──────────────────────────────────────┘
 ```
 
-## Quick Start
+---
 
-### Server (Linux Laptop)
+## 🚀 Quick Start
+
+### 1. Start the Server (Laptop)
 
 ```bash
-cd LinuxExtend/server
+# Clone the repository
+git clone https://github.com/neonjava/LinuxExtend.git
+cd LinuxExtend
 
-# Install dependencies
-pip install -r requirements.txt
+# Run setup (checks dependencies and installs Python packages)
+./scripts/setup_env.sh
 
-# Also need libturbojpeg system library
-sudo dnf install turbojpeg-devel   # Fedora
-# sudo apt install libturbojpeg0-dev  # Ubuntu/Debian
-
-# Run the server
-python -m linuxextend
+# Start the server
+./scripts/run_server.sh
 ```
 
-The server will:
-1. Create a virtual headless display on Hyprland
-2. Start capturing frames at 25 FPS
-3. Start a WebSocket server on port 8080
-4. Advertise itself via mDNS for auto-discovery
+*(Options: `./scripts/run_server.sh -r 1920x1200 -f 30 -q 60` for 16:10 resolution at 30 FPS)*
 
-### Android App (Tablet)
+---
 
+### 2. Connect Your Tablet
+
+#### Option A: Web Browser (Instant — No app install needed)
+1. Open Chrome or Samsung Internet on your tablet.
+2. Go to: `http://<your-laptop-ip>:8080/` (e.g. `http://192.168.1.50:8080/`).
+3. Tap anywhere on the screen for **100% borderless fullscreen**.
+
+#### Option B: Native Android App (Fastest / Lowest Latency)
 ```bash
-cd LinuxExtend/android
+# Connect tablet with USB cable (enable USB Debugging) and run:
+./scripts/install_apk.sh
+```
+In the app, check **USB Mode (localhost)** and tap **Connect**.
 
-# Build the debug APK
-./gradlew assembleDebug
+---
 
-# Install on connected tablet
-~/Android/Sdk/platform-tools/adb install app/build/outputs/apk/debug/app-debug.apk
+## ⌨️ Hyprland Keybindings
+
+Add these lines to your `~/.config/hypr/UserConfigs/UserKeybinds.conf`:
+
+```hyprlang
+# Switch mouse cursor between laptop & tablet
+bindd = SHIFT, Tab, Switch monitor cursor, exec, ~/.config/hypr/scripts/switch_monitor.sh
+bindd = ALT, Tab, Switch monitor cursor, exec, ~/.config/hypr/scripts/switch_monitor.sh
+
+# Move active window to tablet screen
+bindd = $mainMod, M, Move window to other monitor, movewindow, mon:+1
+bindd = $mainMod SHIFT, Tab, Move window to other monitor, movewindow, mon:+1
 ```
 
-### USB Connection
+---
 
-For zero-latency USB connection:
+## 📋 Requirements
 
-```bash
-# On the laptop (after connecting tablet via USB):
-python -m linuxextend --setup-usb
+### Linux Host
+- **Compositor**: Hyprland (wlroots)
+- **Tools**: `grim`, `swww` (for wallpaper sync), `waybar`
+- **Python**: 3.10+ (`fastapi`, `uvicorn`, `zeroconf`, `numpy`)
 
-# Then in the Android app, check "USB Mode" and connect
-```
-
-## Server Options
-
-```
-python -m linuxextend [options]
-
-  --resolution, -r    Virtual display resolution (default: 1920x1080)
-  --fps, -f           Target capture FPS (default: 25)
-  --quality, -q       JPEG quality 1-100 (default: 75)
-  --port, -p          Server port (default: 8080)
-  --no-discovery      Disable mDNS advertising
-  --setup-usb         Set up ADB USB forwarding and exit
-  --verbose, -v       Enable debug logging
-```
-
-## Testing Without the App
-
-Open `http://<your-ip>:8080/` in any browser to see the stream.
-
-## Architecture
-
-- **Virtual Display**: Hyprland's native `hyprctl output create headless`
-- **Capture**: `grim` for Wayland screencopy → PPM → TurboJPEG encoding
-- **Streaming**: WebSocket JPEG frames via FastAPI/uvicorn
-- **Discovery**: Zeroconf/mDNS (`_linuxextend._tcp`)
-- **Android Client**: Kotlin/Jetpack Compose + OkHttp WebSocket
-
-## Requirements
-
-### Server
-- Hyprland (wlroots compositor)
-- Python 3.12+
-- `grim` (screen capture)
-- `libturbojpeg` (JPEG encoding)
-
-### Android
+### Android Client
 - Android 13+ (API 33+)
-- Tested on Samsung Galaxy Tab A9+
+- Tested on Samsung Galaxy Tab A9+ (1920×1200)
+
+---
+
+## 🧪 Testing
+
+Run the automated Python test suite:
+
+```bash
+cd server
+pytest tests/ -v
+```
+
+---
+
+## 📄 License
+
+MIT License. Free and open source.
