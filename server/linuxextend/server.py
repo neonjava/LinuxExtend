@@ -92,7 +92,6 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             background: #444;
         }
         .dot.connected { background: #4ecdc4; box-shadow: 0 0 6px #4ecdc4; }
-        .dot.error { background: #e74c3c; }
         .canvas-container {
             width: 100vw;
             height: 100vh;
@@ -100,12 +99,19 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             background: #000;
+            contain: strict;
+            overflow: hidden;
         }
         canvas {
             width: 100%;
             height: 100%;
             object-fit: contain;
             background: #000;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: pixelated;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            will-change: transform;
         }
         .overlay {
             position: absolute;
@@ -240,12 +246,16 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             ws.onmessage = async (event) => {
                 try {
                     overlay.style.display = 'none';
-                    const bitmap = await createImageBitmap(event.data);
+                    // Fast hardware-accelerated decode without alpha/colorspace conversion overhead
+                    const bitmap = await createImageBitmap(event.data, {
+                        premultiplyAlpha: 'none',
+                        colorSpaceConversion: 'none',
+                    });
 
                     if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
                         canvas.width = bitmap.width;
                         canvas.height = bitmap.height;
-                        ctx = canvas.getContext('bitmaprenderer') || canvas.getContext('2d');
+                        ctx = canvas.getContext('bitmaprenderer', { alpha: false }) || canvas.getContext('2d', { alpha: false });
                     }
 
                     if (pendingBitmap) {
