@@ -73,19 +73,48 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
         }
         .dot.connected { background: #4ecdc4; box-shadow: 0 0 6px #4ecdc455; }
         .dot.error { background: #e74c3c; }
+        .fullscreen-btn {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            color: #4ecdc4;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+        .fullscreen-btn:hover {
+            background: #2a2a2a;
+            border-color: #4ecdc4;
+        }
+        .fullscreen-btn:active {
+            transform: scale(0.96);
+        }
         .canvas-container {
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             width: 100%;
-            padding: 8px;
+            padding: 0;
+            cursor: pointer;
         }
         canvas {
-            max-width: 100%;
-            max-height: calc(100vh - 52px);
-            background: #111;
-            border-radius: 4px;
+            width: 100vw;
+            height: calc(100vh - 52px);
+            object-fit: contain;
+            background: #000;
+        }
+        body:fullscreen .header, body:-webkit-full-screen .header {
+            display: none;
+        }
+        body:fullscreen canvas, body:-webkit-full-screen canvas {
+            height: 100vh;
+            width: 100vw;
         }
         .overlay {
             position: absolute;
@@ -103,6 +132,9 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
     <div class="header">
         <h1>🖥️ Linux<span>Extend</span></h1>
         <div class="stats">
+            <button class="fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">
+                ⛶ Fullscreen
+            </button>
             <div class="stat">
                 <div class="dot" id="statusDot"></div>
                 <span class="stat-value" id="statusText">Connecting</span>
@@ -112,17 +144,13 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
                 <span class="stat-value" id="fpsValue">0</span>
             </div>
             <div class="stat">
-                <span class="stat-label">Frame</span>
-                <span class="stat-value" id="sizeValue">—</span>
-            </div>
-            <div class="stat">
                 <span class="stat-label">Res</span>
                 <span class="stat-value" id="resValue">—</span>
             </div>
         </div>
     </div>
 
-    <div class="canvas-container">
+    <div class="canvas-container" id="container" ondblclick="toggleFullscreen()">
         <canvas id="screenCanvas"></canvas>
         <div class="overlay" id="overlay">
             <div class="icon">📡</div>
@@ -136,13 +164,31 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const fpsValue = document.getElementById('fpsValue');
-        const sizeValue = document.getElementById('sizeValue');
         const resValue = document.getElementById('resValue');
+        const fsBtn = document.getElementById('fsBtn');
 
         let ctx = null;
         let frameCount = 0;
         let lastFpsTime = performance.now();
         let ws = null;
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                }
+                if (fsBtn) fsBtn.textContent = '✕ Exit Fullscreen';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+                if (fsBtn) fsBtn.textContent = '⛶ Fullscreen';
+            }
+        }
 
         function formatBytes(bytes) {
             if (bytes < 1024) return bytes + ' B';
