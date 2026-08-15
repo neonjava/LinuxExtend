@@ -1,0 +1,5 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+PyTurboJPEG>=1.7.0
+zeroconf>=0.136.0
+numpy>=2.0.0
