@@ -30,91 +30,82 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
     <title>LinuxExtend - Stream Test</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #0a0a0a;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
+        html, body {
+            width: 100%;
+            height: 100%;
             overflow: hidden;
+            background: #000;
+            color: #e0e0e0;
+            font-family: system-ui, -apple-system, sans-serif;
+            touch-action: none;
+            user-select: none;
         }
         .header {
-            padding: 12px 20px;
-            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 44px;
+            padding: 0 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: #111;
-            border-bottom: 1px solid #222;
-            z-index: 10;
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 50;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .header.hidden {
+            opacity: 0;
+            transform: translateY(-100%);
+            pointer-events: none;
         }
         .header h1 {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
-            letter-spacing: 0.5px;
         }
         .header h1 span { color: #4ecdc4; }
         .stats {
             display: flex;
-            gap: 16px;
-            font-size: 12px;
-            font-variant-numeric: tabular-nums;
+            align-items: center;
+            gap: 12px;
+            font-size: 11px;
         }
-        .stat { display: flex; align-items: center; gap: 4px; }
-        .stat-label { color: #666; }
-        .stat-value { color: #ccc; font-weight: 500; }
-        .dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: #444;
-            transition: background 0.3s;
-        }
-        .dot.connected { background: #4ecdc4; box-shadow: 0 0 6px #4ecdc455; }
-        .dot.error { background: #e74c3c; }
         .fullscreen-btn {
-            background: #1e1e1e;
-            border: 1px solid #333;
-            color: #4ecdc4;
-            padding: 4px 10px;
+            background: #4ecdc4;
+            border: none;
+            color: #002220;
+            padding: 5px 12px;
             border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
+            font-size: 11px;
+            font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 4px;
-            transition: all 0.2s;
         }
-        .fullscreen-btn:hover {
-            background: #2a2a2a;
-            border-color: #4ecdc4;
+        .stat { display: flex; align-items: center; gap: 4px; }
+        .dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #444;
         }
-        .fullscreen-btn:active {
-            transform: scale(0.96);
-        }
+        .dot.connected { background: #4ecdc4; box-shadow: 0 0 6px #4ecdc4; }
+        .dot.error { background: #e74c3c; }
         .canvas-container {
-            flex: 1;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
-            padding: 0;
-            cursor: pointer;
-        }
-        canvas {
-            width: 100vw;
-            height: calc(100vh - 52px);
-            object-fit: contain;
             background: #000;
         }
-        body:fullscreen .header, body:-webkit-full-screen .header {
-            display: none;
-        }
-        body:fullscreen canvas, body:-webkit-full-screen canvas {
-            height: 100vh;
-            width: 100vw;
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
         }
         .overlay {
             position: absolute;
@@ -122,55 +113,47 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            color: #666;
+            color: #888;
+            pointer-events: none;
         }
-        .overlay .icon { font-size: 48px; margin-bottom: 12px; }
-        .overlay .msg { font-size: 14px; }
+        .overlay .icon { font-size: 40px; margin-bottom: 8px; }
+        .overlay .msg { font-size: 13px; }
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="header" id="header">
         <h1>🖥️ Linux<span>Extend</span></h1>
         <div class="stats">
             <button class="fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">
-                ⛶ Fullscreen
+                ⛶ Tap for Fullscreen
             </button>
             <div class="stat">
                 <div class="dot" id="statusDot"></div>
-                <span class="stat-value" id="statusText">Connecting</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">FPS</span>
-                <span class="stat-value" id="fpsValue">0</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Res</span>
-                <span class="stat-value" id="resValue">—</span>
+                <span id="fpsValue">0 FPS</span>
             </div>
         </div>
     </div>
 
-    <div class="canvas-container" id="container" ondblclick="toggleFullscreen()">
+    <div class="canvas-container" id="container" onclick="handleTap()">
         <canvas id="screenCanvas"></canvas>
         <div class="overlay" id="overlay">
             <div class="icon">📡</div>
-            <div class="msg">Connecting to stream...</div>
+            <div class="msg">Connecting to LinuxExtend...</div>
         </div>
     </div>
 
     <script>
         const canvas = document.getElementById('screenCanvas');
         const overlay = document.getElementById('overlay');
+        const header = document.getElementById('header');
         const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
         const fpsValue = document.getElementById('fpsValue');
-        const resValue = document.getElementById('resValue');
-        const fsBtn = document.getElementById('fsBtn');
 
         let ctx = null;
         let frameCount = 0;
         let lastFpsTime = performance.now();
         let ws = null;
+        let hideTimeout = null;
 
         function toggleFullscreen() {
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -179,14 +162,39 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
                 } else if (document.documentElement.webkitRequestFullscreen) {
                     document.documentElement.webkitRequestFullscreen();
                 }
-                if (fsBtn) fsBtn.textContent = '✕ Exit Fullscreen';
+                header.classList.add('hidden');
             } else {
                 if (document.exitFullscreen) {
                     document.exitFullscreen();
                 } else if (document.webkitExitFullscreen) {
                     document.webkitExitFullscreen();
                 }
-                if (fsBtn) fsBtn.textContent = '⛶ Fullscreen';
+                header.classList.remove('hidden');
+            }
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                header.classList.add('hidden');
+            } else {
+                header.classList.remove('hidden');
+            }
+        });
+
+        function handleTap() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                toggleFullscreen();
+            } else {
+                // In fullscreen: brief toggle header on tap
+                if (header.classList.contains('hidden')) {
+                    header.classList.remove('hidden');
+                    clearTimeout(hideTimeout);
+                    hideTimeout = setTimeout(() => {
+                        if (document.fullscreenElement) header.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    header.classList.add('hidden');
+                }
             }
         }
 

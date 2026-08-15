@@ -84,7 +84,7 @@ class ScreenCapture:
         """Capture a single PPM frame from grim to stdout."""
         try:
             result = subprocess.run(
-                ["grim", "-o", self.output_name, "-t", "ppm", "-"],
+                ["grim", "-c", "-o", self.output_name, "-t", "ppm", "-"],
                 capture_output=True,
                 timeout=5,
             )
@@ -203,7 +203,7 @@ class ScreenCapture:
                 # Direct grim JPEG capture mode
                 try:
                     proc = subprocess.run(
-                        ["grim", "-o", self.output_name, "-t", "jpeg", "-q", str(self.quality), "-"],
+                        ["grim", "-c", "-o", self.output_name, "-t", "jpeg", "-q", str(self.quality), "-"],
                         capture_output=True,
                         timeout=5,
                     )
