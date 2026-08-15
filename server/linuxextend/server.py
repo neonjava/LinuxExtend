@@ -154,6 +154,7 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
         let lastFpsTime = performance.now();
         let ws = null;
         let hideTimeout = null;
+        let pendingBitmap = null;
 
         function toggleFullscreen() {
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -185,7 +186,6 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 toggleFullscreen();
             } else {
-                // In fullscreen: brief toggle header on tap
                 if (header.classList.contains('hidden')) {
                     header.classList.remove('hidden');
                     clearTimeout(hideTimeout);
@@ -198,20 +198,32 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
             }
         }
 
-        function formatBytes(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            return (bytes / 1024).toFixed(1) + ' KB';
-        }
-
         function updateFps() {
             const now = performance.now();
             const elapsed = (now - lastFpsTime) / 1000;
             if (elapsed >= 1.0) {
-                fpsValue.textContent = Math.round(frameCount / elapsed);
+                if (fpsValue) fpsValue.textContent = Math.round(frameCount / elapsed) + ' FPS';
                 frameCount = 0;
                 lastFpsTime = now;
             }
         }
+
+        // Hardware-synchronized requestAnimationFrame render loop
+        function renderLoop() {
+            if (pendingBitmap && ctx) {
+                if (ctx.transferFromImageBitmap) {
+                    ctx.transferFromImageBitmap(pendingBitmap);
+                } else {
+                    ctx.drawImage(pendingBitmap, 0, 0);
+                    pendingBitmap.close();
+                }
+                pendingBitmap = null;
+                frameCount++;
+                updateFps();
+            }
+            requestAnimationFrame(renderLoop);
+        }
+        requestAnimationFrame(renderLoop);
 
         function connect() {
             const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -236,15 +248,10 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
                         ctx = canvas.getContext('bitmaprenderer') || canvas.getContext('2d');
                     }
 
-                    if (ctx.transferFromImageBitmap) {
-                        ctx.transferFromImageBitmap(bitmap);
-                    } else {
-                        ctx.drawImage(bitmap, 0, 0);
-                        bitmap.close();
+                    if (pendingBitmap) {
+                        pendingBitmap.close();
                     }
-
-                    frameCount++;
-                    updateFps();
+                    pendingBitmap = bitmap;
                 } catch (e) {
                     console.error('Frame decode error:', e);
                 }
@@ -257,7 +264,7 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
                 setTimeout(connect, 1500);
             };
 
-            ws.onerror = (err) => {
+            ws.onerror = () => {
                 if (statusDot) statusDot.className = 'dot error';
             };
         }
@@ -299,22 +306,22 @@ async def screen_stream(websocket: WebSocket) -> None:
     logger.info("Client connected: %s (total: %d)", client_id, len(_connected_clients))
 
     try:
-        frame_interval = capture_engine.frame_interval if capture_engine else 0.033
         client_last_frame_id = -1
 
         while True:
             if capture_engine is None:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)
                 continue
 
             frame, frame_id = capture_engine.get_frame_with_id()
 
-            # Send if we have a frame and it is newer than the last sent to this client
+            # Send immediately if a newer frame is available
             if frame is not None and frame_id != client_last_frame_id:
                 await websocket.send_bytes(frame)
                 client_last_frame_id = frame_id
-
-            await asyncio.sleep(frame_interval)
+                await asyncio.sleep(0.008)  # Sub-10ms yield
+            else:
+                await asyncio.sleep(0.005)  # Fast poll for next frame
 
     except WebSocketDisconnect:
         logger.info("Client disconnected: %s", client_id)
