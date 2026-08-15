@@ -82,6 +82,15 @@ class VirtualDisplay:
             if m["name"].startswith("HEADLESS-")
         }
 
+    def _cleanup_orphans(self) -> None:
+        """Remove any leftover headless outputs from previous crashes or runs."""
+        for name in self._get_headless_names():
+            try:
+                self._run_hyprctl("output", "remove", name)
+                logger.info("Cleaned up orphaned headless output: %s", name)
+            except Exception as e:
+                logger.debug("Failed to remove orphaned output %s: %s", name, e)
+
     def _get_primary_monitor(self) -> dict | None:
         """Find the primary (focused) monitor."""
         monitors = self._get_monitors()
@@ -101,6 +110,9 @@ class VirtualDisplay:
         """
         if self._created:
             raise VirtualDisplayError("Display already created")
+
+        # Clean up any leftover headless outputs from previous runs
+        self._cleanup_orphans()
 
         # Snapshot current headless outputs
         before = self._get_headless_names()
