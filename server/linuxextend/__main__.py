@@ -185,6 +185,10 @@ def main() -> None:
     # Register signal handlers
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
+    try:
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    except (AttributeError, ValueError):
+        pass
 
     try:
         # Step 1: Create virtual display
@@ -242,12 +246,17 @@ def main() -> None:
 """)
 
         # Step 4: Run the server (blocks until interrupted)
-        uvicorn.run(
+        config_uv = uvicorn.Config(
             server_module.app,
             host=config.host,
             port=config.port,
             log_level="warning",
+            loop="asyncio",
         )
+        server_instance = uvicorn.Server(config_uv)
+        # Disable uvicorn's default signal override so our handlers control lifecycle
+        server_instance.install_signal_handlers = lambda: None
+        server_instance.run()
 
     except VirtualDisplayError as e:
         print(f"{_RED}✗ Display error: {e}{_RESET}")
