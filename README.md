@@ -46,11 +46,18 @@ cd LinuxExtend
 # Run setup (checks dependencies and installs Python packages)
 ./scripts/setup_env.sh
 
-# Start the server
+# Start the server (or use the new CLI: linuxextend on)
 ./scripts/run_server.sh
 ```
 
 *(Options: `./scripts/run_server.sh -r 1920x1200 -f 30 -q 60` for 16:10 resolution at 30 FPS)*
+
+> **Tip:** You can also use the unified CLI tool:
+> ```bash
+> linuxextend on     # Start server & configure tablet
+> linuxextend off    # Stop server & remove virtual display
+> linuxextend status # View connection & monitor status
+> ```
 
 ---
 
