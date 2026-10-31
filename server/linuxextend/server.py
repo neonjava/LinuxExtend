@@ -93,25 +93,29 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
         }
         .dot.connected { background: #4ecdc4; box-shadow: 0 0 6px #4ecdc4; }
         .canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
+            margin: 0;
+            padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             background: #000;
-            contain: strict;
             overflow: hidden;
         }
         canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: fill !important;
             background: #000;
             image-rendering: -webkit-optimize-contrast;
-            image-rendering: pixelated;
             transform: translateZ(0);
-            backface-visibility: hidden;
-            will-change: transform;
         }
         .overlay {
             position: absolute;
@@ -130,8 +134,11 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
     <div class="header" id="header">
         <h1>🖥️ Linux<span>Extend</span></h1>
         <div class="stats">
-            <button class="fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">
-                ⛶ Tap for Fullscreen
+            <button class="fullscreen-btn" id="fitBtn" onclick="toggleFit(event)" style="background: rgba(255,255,255,0.15); color: #fff;">
+                ↔️ Stretch Fit
+            </button>
+            <button class="fullscreen-btn" id="fsBtn" onclick="toggleFullscreen(event)">
+                ⛶ Fullscreen
             </button>
             <div class="stat">
                 <div class="dot" id="statusDot"></div>
@@ -161,8 +168,18 @@ TEST_PAGE_HTML = """<!DOCTYPE html>
         let ws = null;
         let hideTimeout = null;
         let pendingBitmap = null;
+        let isFitFill = true;
 
-        function toggleFullscreen() {
+        function toggleFit(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            isFitFill = !isFitFill;
+            canvas.style.setProperty('object-fit', isFitFill ? 'fill' : 'contain', 'important');
+            const btn = document.getElementById('fitBtn');
+            if (btn) btn.textContent = isFitFill ? '↔️ Stretch Fit' : '⬛ Contain Aspect';
+        }
+
+        function toggleFullscreen(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 if (document.documentElement.requestFullscreen) {
                     document.documentElement.requestFullscreen();
@@ -315,21 +332,29 @@ async def screen_stream(websocket: WebSocket) -> None:
     _connected_clients.add(client_id)
     logger.info("Client connected: %s (total: %d)", client_id, len(_connected_clients))
 
-    try:
-        client_last_frame_id = -1
+    target_fps = getattr(capture_engine, "target_fps", 30) if capture_engine else 30
+    min_send_interval = 1.0 / max(1, target_fps)  # Prevent socket bufferbloat based on target FPS
+    last_send_time = 0.0
+    client_last_frame_id = -1
 
+    try:
         while True:
             if capture_engine is None:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.05)
                 continue
 
             frame, frame_id = capture_engine.get_frame_with_id()
 
-            # Send immediately if a newer frame is available
+            now = time.monotonic()
+            # Send immediately if a newer frame is available and send interval has passed
             if frame is not None and frame_id != client_last_frame_id:
-                await websocket.send_bytes(frame)
-                client_last_frame_id = frame_id
-                await asyncio.sleep(0.008)  # Sub-10ms yield
+                if (now - last_send_time) >= min_send_interval:
+                    await asyncio.wait_for(websocket.send_bytes(frame), timeout=0.5)
+                    client_last_frame_id = frame_id
+                    last_send_time = now
+                    await asyncio.sleep(0.002)
+                else:
+                    await asyncio.sleep(max(0.002, min_send_interval - (now - last_send_time)))
             else:
                 await asyncio.sleep(0.005)  # Fast poll for next frame
 

@@ -10,11 +10,13 @@ class Config:
     # Virtual display settings
     resolution: str = "1920x1080"
     refresh_rate: int = 60
-    position: str = "auto"  # "auto" = right of primary monitor
+    position: str = "auto"  # "auto" (right of primary), "left", "right", or custom XxY
+    transform: int = 0  # 0 = normal, 1 = 90deg, 2 = 180deg, 3 = 270deg
 
     # Capture settings
     target_fps: int = 25
     jpeg_quality: int = 75
+    num_workers: int = 2
 
     # Server settings
     host: str = "0.0.0.0"

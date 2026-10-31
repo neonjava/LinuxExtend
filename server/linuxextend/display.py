@@ -33,12 +33,15 @@ class VirtualDisplay:
         resolution: str = "1920x1080",
         refresh_rate: int = 60,
         position: str = "auto",
+        transform: int = 0,
     ):
         self.resolution = resolution
         self.refresh_rate = refresh_rate
         self.position = position
+        self.transform = transform
         self.name: str | None = None
         self._created = False
+        self._original_primary_rule: str | None = None
 
     def __enter__(self) -> "VirtualDisplay":
         self.create()
@@ -119,10 +122,10 @@ class VirtualDisplay:
 
         # Calculate target position in advance to prevent initial 0x0 overlap
         pos_str = self._calc_position()
-        self._run_hyprctl(
-            "keyword", "monitor",
-            f"HEADLESS-*,{self.resolution}@{self.refresh_rate},{pos_str},1"
-        )
+        init_rule = f"HEADLESS-*,{self.resolution}@{self.refresh_rate},{pos_str},1"
+        if self.transform != 0:
+            init_rule += f",transform,{self.transform}"
+        self._run_hyprctl("keyword", "monitor", init_rule)
 
         # Create the headless output
         result = self._run_hyprctl("output", "create", "headless")
@@ -175,15 +178,28 @@ class VirtualDisplay:
 
     def _calc_position(self) -> str:
         """Calculate the target monitor position string."""
-        if self.position == "auto":
-            primary = self._get_primary_monitor()
+        primary = self._get_primary_monitor()
+        p_name = primary.get("name", "eDP-1") if primary else "eDP-1"
+        p_w = primary.get("width", 1920) if primary else 1920
+        p_h = primary.get("height", 1080) if primary else 1080
+        p_r = int(primary.get("refreshRate", 60)) if primary else 60
+        p_x = primary.get("x", 0) if primary else 0
+        p_y = primary.get("y", 0) if primary else 0
+        p_scale = primary.get("scale", 1.0) if primary else 1.0
+
+        if primary and self._original_primary_rule is None:
+            self._original_primary_rule = f"{p_name},{p_w}x{p_h}@{p_r},{p_x}x{p_y},{p_scale}"
+
+        if self.position == "left":
+            w, h = map(int, self.resolution.split("x"))
+            eff_w = h if self.transform in (1, 3) else w
             if primary:
-                # Lock primary monitor at 0x0
-                p_name = primary.get("name", "eDP-1")
-                p_w = primary.get("width", 1920)
-                p_h = primary.get("height", 1080)
-                p_r = int(primary.get("refreshRate", 144))
-                self._run_hyprctl("keyword", "monitor", f"{p_name},{p_w}x{p_h}@{p_r},0x0,1")
+                # Shift primary monitor right to keep all coords non-negative (supports layer-shell like swww/waybar)
+                self._run_hyprctl("keyword", "monitor", f"{p_name},{p_w}x{p_h}@{p_r},{eff_w}x0,{p_scale}")
+            return "0x0"
+        elif self.position == "auto" or self.position == "right":
+            if primary:
+                self._run_hyprctl("keyword", "monitor", f"{p_name},{p_w}x{p_h}@{p_r},0x0,{p_scale}")
                 return f"{p_w}x0"
             return "1920x0"
         return self.position
@@ -202,14 +218,16 @@ class VirtualDisplay:
             f"{position_str},"
             f"1"
         )
+        if self.transform != 0:
+            monitor_rule += f",transform,{self.transform}"
 
         result = self._run_hyprctl("keyword", "monitor", monitor_rule)
         if "ok" not in result.lower() and "error" in result.lower():
             logger.warning("Monitor configuration warning: %s", result)
         else:
             logger.info(
-                "Configured %s: %s@%dHz at %s",
-                self.name, self.resolution, self.refresh_rate, position_str,
+                "Configured %s: %s@%dHz at %s (transform %d)",
+                self.name, self.resolution, self.refresh_rate, position_str, self.transform,
             )
 
     def remove(self) -> None:
@@ -218,14 +236,26 @@ class VirtualDisplay:
             return
 
         try:
+            if self._original_primary_rule:
+                self._run_hyprctl("keyword", "monitor", self._original_primary_rule)
+            elif self.position == "left":
+                primary = self._get_primary_monitor()
+                if primary:
+                    p_name = primary.get("name", "eDP-1")
+                    p_w = primary.get("width", 1920)
+                    p_h = primary.get("height", 1080)
+                    p_r = int(primary.get("refreshRate", 60))
+                    p_scale = primary.get("scale", 1.0)
+                    self._run_hyprctl("keyword", "monitor", f"{p_name},{p_w}x{p_h}@{p_r},0x0,{p_scale}")
             result = self._run_hyprctl("output", "remove", self.name)
             if "ok" in result.lower():
                 logger.info("Removed headless output: %s", self.name)
             else:
                 logger.warning("Unexpected result removing %s: %s", self.name, result)
-        except VirtualDisplayError as e:
+        except Exception as e:
             logger.error("Failed to remove display %s: %s", self.name, e)
         finally:
+            self.name = None
             self._created = False
 
     def get_info(self) -> dict:
