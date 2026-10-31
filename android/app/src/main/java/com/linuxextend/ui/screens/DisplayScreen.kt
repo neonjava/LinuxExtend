@@ -59,7 +59,6 @@ fun DisplayScreen(
 
     var showOverlay by remember { mutableStateOf(false) }
     var showFps by remember { mutableStateOf(true) }
-    var fillBounds by remember { mutableStateOf(true) }
 
     // Keep screen on
     val context = LocalContext.current
@@ -101,7 +100,7 @@ fun DisplayScreen(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Second Screen",
                 modifier = Modifier.fillMaxSize(),
-                contentScale = if (fillBounds) ContentScale.FillBounds else ContentScale.Fit,
+                contentScale = ContentScale.Fit,
             )
         }
 

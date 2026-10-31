@@ -5,11 +5,11 @@
 
 set -eo pipefail
 
-INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/linuxextend"
+INSTALL_DIR="/home/neonjava/LinuxExtend"
+LOG_DIR="$HOME/.local/state/linuxextend"
 LOG_FILE="$LOG_DIR/server.log"
 PID_FILE="$LOG_DIR/server.pid"
-ADB_BIN="${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb"
+ADB_BIN="/home/neonjava/Android/Sdk/platform-tools/adb"
 [ -x "$ADB_BIN" ] || ADB_BIN="$(command -v adb 2>/dev/null || true)"
 
 mkdir -p "$LOG_DIR"
@@ -44,7 +44,7 @@ get_pid() {
             return
         fi
     fi
-    pgrep -f "python3 -m linuxextend" 2>/dev/null | head -1 || true
+    pgrep -f "python3 -m linuxextend" | head -1
 }
 
 cleanup_displays() {
@@ -68,13 +68,10 @@ setup_usb() {
             "$ADB_BIN" reverse tcp:8080 tcp:8080 >/dev/null 2>&1 || true
             echo -e "  ${C_GREEN}✓ USB ADB reverse active${C_RESET}"
             
-            # Launch on tablet: native app if installed, otherwise browser
+            # Check if app is installed and launch it
             if "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.linuxextend"; then
                 echo -e "  ${C_CYAN}Launching LinuxExtend on tablet...${C_RESET}"
                 "$ADB_BIN" shell am start -n com.linuxextend/.MainActivity >/dev/null 2>&1 || true
-            elif "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.android.chrome"; then
-                echo -e "  ${C_CYAN}Launching stream in Chrome on tablet...${C_RESET}"
-                "$ADB_BIN" shell am start -n com.android.chrome/com.google.android.apps.chrome.Main -d "http://127.0.0.1:8080" >/dev/null 2>&1 || true
             fi
         fi
     fi
@@ -95,17 +92,10 @@ cmd_start() {
     echo -e "${C_BOLD}${C_BLUE}Starting LinuxExtend server...${C_RESET}"
     cd "$INSTALL_DIR/server"
 
-    # Start server in background (using systemd-run if available, else nohup)
-    if command -v systemd-run >/dev/null 2>&1; then
-        systemd-run --user --unit=linuxextend-server --working-directory="$INSTALL_DIR/server" python3 -u -m linuxextend "$@" >/dev/null 2>&1
-        local s_pid
-        s_pid=$(pgrep -f "python3 -u -m linuxextend" 2>/dev/null | head -1 || true)
-        [ -n "$s_pid" ] && echo "$s_pid" > "$PID_FILE"
-    else
-        nohup python3 -u -m linuxextend "$@" < /dev/null > "$LOG_FILE" 2>&1 &
-        local s_pid=$!
-        echo "$s_pid" > "$PID_FILE"
-    fi
+    # Start server in background
+    nohup python3 -m linuxextend "$@" > "$LOG_FILE" 2>&1 &
+    local s_pid=$!
+    echo "$s_pid" > "$PID_FILE"
 
     # Wait for virtual display initialization
     local timeout=10
@@ -152,11 +142,6 @@ cmd_start() {
 cmd_stop() {
     echo -e "${C_BOLD}${C_BLUE}Stopping LinuxExtend...${C_RESET}"
     local stopped=0
-
-    # Stop systemd unit if running
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl --user stop linuxextend-server 2>/dev/null || true
-    fi
 
     local pid
     pid=$(get_pid)

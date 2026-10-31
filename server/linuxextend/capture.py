@@ -61,7 +61,7 @@ class ScreenCapture:
     def _worker_loop(self, worker_id: int) -> None:
         """Staggered worker loop that continuously grabs frames."""
         # Stagger worker starts to space out frame captures evenly
-        time.sleep(worker_id * (self.frame_interval / max(1, self.num_workers)))
+        time.sleep((worker_id * self.frame_interval) / self.num_workers)
 
         cmd = [
             "grim",
@@ -71,8 +71,6 @@ class ScreenCapture:
             "-q", str(self.quality),
             "-",
         ]
-
-        worker_interval = self.frame_interval * self.num_workers
 
         while self._running:
             t0 = time.monotonic()
@@ -88,7 +86,7 @@ class ScreenCapture:
 
             # Frame pacing to prevent worker overlap
             elapsed = time.monotonic() - t0
-            sleep_time = max(0.005, worker_interval - elapsed)
+            sleep_time = max(0.005, self.frame_interval - elapsed)
             time.sleep(sleep_time)
 
     def _fps_tracker_loop(self) -> None:

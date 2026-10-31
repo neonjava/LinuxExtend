@@ -20,8 +20,6 @@ def test_default_config():
 def test_custom_config():
     config = Config(
         resolution="1920x1200",
-        position="left",
-        transform=1,
         target_fps=30,
         jpeg_quality=85,
         port=9090,
@@ -29,8 +27,6 @@ def test_custom_config():
     assert config.resolution == "1920x1200"
     assert config.width == 1920
     assert config.height == 1200
-    assert config.position == "left"
-    assert config.transform == 1
     assert config.target_fps == 30
     assert config.jpeg_quality == 85
     assert config.port == 9090

@@ -17,18 +17,7 @@ fi
 
 if [ ! -f "$APK_PATH" ]; then
     echo "📦 APK not found. Building with Gradle..."
-    if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
-        for candidate in \
-            "$HOME/.jdks/jbr-17.0.14" \
-            "/usr/lib/jvm/java-17-openjdk" \
-            "/usr/lib/jvm/java-17" \
-            "/usr/lib/jvm/default-java"; do
-            if [ -d "$candidate" ]; then
-                export JAVA_HOME="$candidate"
-                break
-            fi
-        done
-    fi
+    export JAVA_HOME="${JAVA_HOME:-$HOME/.jdks/jbr-17.0.14}"
     export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
     cd "$SCRIPT_DIR/android"
     ./gradlew assembleDebug

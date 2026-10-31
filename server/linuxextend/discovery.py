@@ -51,41 +51,34 @@ class ServiceAdvertiser:
         self._service_info: ServiceInfo | None = None
         self._local_ip = _get_local_ip()
 
-    def start(self, background: bool = False) -> None:
+    def start(self) -> None:
         """Register the mDNS service."""
-        def _do_register():
-            try:
-                hostname = socket.gethostname()
+        try:
+            hostname = socket.gethostname()
 
-                self._service_info = ServiceInfo(
-                    type_="_linuxextend._tcp.local.",
-                    name=f"{self.name}._linuxextend._tcp.local.",
-                    addresses=[socket.inet_aton(self._local_ip)],
-                    port=self.port,
-                    properties={
-                        "version": "1.0",
-                        "resolution": self.resolution,
-                        "hostname": hostname,
-                    },
-                    server=f"{hostname}.local.",
-                )
+            self._service_info = ServiceInfo(
+                type_="_linuxextend._tcp.local.",
+                name=f"{self.name}._linuxextend._tcp.local.",
+                addresses=[socket.inet_aton(self._local_ip)],
+                port=self.port,
+                properties={
+                    "version": "1.0",
+                    "resolution": self.resolution,
+                    "hostname": hostname,
+                },
+                server=f"{hostname}.local.",
+            )
 
-                self._zeroconf = Zeroconf()
-                self._zeroconf.register_service(self._service_info)
+            self._zeroconf = Zeroconf()
+            self._zeroconf.register_service(self._service_info)
 
-                logger.info(
-                    "mDNS service advertised: %s._linuxextend._tcp.local. at %s:%d",
-                    self.name, self._local_ip, self.port,
-                )
-            except Exception as e:
-                logger.error("Failed to start mDNS advertising: %s", e)
-                self._zeroconf = None
-
-        if background:
-            import threading
-            threading.Thread(target=_do_register, daemon=True).start()
-        else:
-            _do_register()
+            logger.info(
+                "mDNS service advertised: %s._linuxextend._tcp.local. at %s:%d",
+                self.name, self._local_ip, self.port,
+            )
+        except Exception as e:
+            logger.error("Failed to start mDNS advertising: %s", e)
+            self._zeroconf = None
 
     def stop(self) -> None:
         """Unregister the mDNS service and close Zeroconf."""

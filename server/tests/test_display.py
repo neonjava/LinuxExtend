@@ -6,15 +6,13 @@ import pytest
 from linuxextend.display import VirtualDisplay, VirtualDisplayError
 
 
-def test_virtual_display_left_position():
-    display = VirtualDisplay(resolution="1920x1080", position="left", transform=1)
-    primary = {"name": "eDP-1", "x": 0, "y": 0, "width": 1920, "height": 1080, "refreshRate": 144, "scale": 1.0}
-    with patch.object(display, "_get_primary_monitor", return_value=primary):
-        with patch.object(display, "_run_hyprctl", return_value="ok") as mock_hyprctl:
-            pos = display._calc_position()
-            assert pos == "0x0"
-            # Primary should be shifted right by effective width (1080)
-            mock_hyprctl.assert_called_with("keyword", "monitor", "eDP-1,1920x1080@144,1080x0,1.0")
+def test_virtual_display_init():
+    display = VirtualDisplay(resolution="1920x1200", refresh_rate=90, position="0x0")
+    assert display.resolution == "1920x1200"
+    assert display.refresh_rate == 90
+    assert display.position == "0x0"
+    assert display.name is None
+    assert display.is_active is False
 
 
 def test_virtual_display_create_and_remove():

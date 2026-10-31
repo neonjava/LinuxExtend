@@ -100,31 +100,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fps", "-f",
         type=int,
-        default=30,
-        help="Target capture FPS (default: 30)",
+        default=25,
+        help="Target capture FPS (default: 25)",
     )
     parser.add_argument(
         "--quality", "-q",
         type=int,
-        default=60,
-        help="JPEG quality 1-100 (default: 60)",
-    )
-    parser.add_argument(
-        "--position",
-        choices=["left", "right", "auto"],
-        default="auto",
-        help="Monitor position relative to primary: left, right, or auto (default: auto)",
-    )
-    parser.add_argument(
-        "--transform", "-t",
-        type=int,
-        default=0,
-        help="Display transform (0=normal, 1=portrait 90deg, 2=180deg, 3=270deg) (default: 0)",
-    )
-    parser.add_argument(
-        "--portrait",
-        action="store_true",
-        help="Quick setup: portrait orientation on the left (transform=1, position=left)",
+        default=75,
+        help="JPEG quality 1-100 (default: 75)",
     )
     parser.add_argument(
         "--port", "-p",
@@ -157,11 +140,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    if args.portrait:
-        if args.transform == 0:
-            args.transform = 1
-        if args.position == "auto":
-            args.position = "left"
     _setup_logging(args.verbose)
     _print_banner()
 
@@ -172,8 +150,6 @@ def main() -> None:
 
     config = Config(
         resolution=args.resolution,
-        position=args.position,
-        transform=args.transform,
         target_fps=args.fps,
         jpeg_quality=args.quality,
         port=args.port,
@@ -220,11 +196,9 @@ def main() -> None:
         display = VirtualDisplay(
             resolution=config.resolution,
             refresh_rate=config.refresh_rate,
-            position=config.position,
-            transform=config.transform,
         )
         display.create()
-        print(f"  {_GREEN}✓ {display.name}{_RESET} — {config.resolution}@{config.refresh_rate}Hz (pos: {config.position}, transform: {config.transform})")
+        print(f"  {_GREEN}✓ {display.name}{_RESET} — {config.resolution}@{config.refresh_rate}Hz")
 
         # Step 2: Start screen capture
         print(f"{_CYAN}📸 Starting screen capture...{_RESET}")
@@ -232,7 +206,6 @@ def main() -> None:
             output_name=display.name,
             fps=config.target_fps,
             quality=config.jpeg_quality,
-            num_workers=config.num_workers,
         )
         capture.start()
         print(f"  {_GREEN}✓ Capturing at {config.target_fps} FPS, JPEG quality {config.jpeg_quality}{_RESET}")
@@ -245,7 +218,7 @@ def main() -> None:
                 name=config.service_name,
                 resolution=config.resolution,
             )
-            advertiser.start(background=True)
+            advertiser.start()
             local_ip = advertiser.local_ip
             print(f"  {_GREEN}✓ Advertising as {config.service_name}._linuxextend._tcp.local.{_RESET}")
         else:
