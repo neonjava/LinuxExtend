@@ -289,6 +289,57 @@ cmd_logs() {
     fi
 }
 
+cmd_ip() {
+    local host_ip
+    host_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' || echo "127.0.0.1")
+    local host_name
+    host_name=$(hostname 2>/dev/null || echo "fedora")
+    local port=8080
+
+    echo ""
+    echo -e "${C_BOLD}${C_BLUE}══════════════════════════════════════════════════════════${C_RESET}"
+    echo -e "${C_BOLD} 🖥️  LinuxExtend Connection URLs & IP Info${C_RESET}"
+    echo -e "${C_BOLD}${C_BLUE}══════════════════════════════════════════════════════════${C_RESET}"
+    echo ""
+    echo -e "  ${C_BOLD}1. Permanent Wi-Fi Link (Same Every Time via mDNS):${C_RESET}"
+    echo -e "     👉 ${C_CYAN}${C_BOLD}http://${host_name}.local:${port}/${C_RESET}"
+    echo -e "     ${C_DIM}(Never changes regardless of what IP your Wi-Fi router gives!)${C_RESET}"
+    echo ""
+    echo -e "  ${C_BOLD}2. Current Local Wi-Fi IP Link:${C_RESET}"
+    echo -e "     👉 ${C_GREEN}${C_BOLD}http://${host_ip}:${port}/${C_RESET}"
+    echo ""
+    echo -e "  ${C_BOLD}3. USB Cable Mode (Zero Latency):${C_RESET}"
+    echo -e "     👉 ${C_YELLOW}http://127.0.0.1:${port}/${C_RESET} (after running: ${C_CYAN}le usb${C_RESET})"
+    echo ""
+
+    if python3 -c "import qrcode" 2>/dev/null; then
+        echo -e "  ${C_BOLD}📷 Scan with Tablet Camera to Open Instantly:${C_RESET}"
+        echo ""
+        python3 -c "
+import qrcode
+qr = qrcode.QRCode(border=1)
+qr.add_data('http://${host_ip}:${port}/')
+qr.make(fit=True)
+qr.print_ascii(invert=True)
+" 2>/dev/null || true
+        echo ""
+    fi
+
+    local active_conn
+    active_conn=$(nmcli -t -f NAME connection show --active 2>/dev/null | grep -v "lo" | head -1 || true)
+    if [ -n "$active_conn" ]; then
+        local gw
+        gw=$(ip route show default 2>/dev/null | awk '{print $3}' || echo "172.23.91.1")
+        echo -e "${C_BOLD}${C_BLUE}──────────────────────────────────────────────────────────${C_RESET}"
+        echo -e "  ${C_BOLD}📌 Lock this Wi-Fi IP (${host_ip}) Permanently:${C_RESET}"
+        echo -e "  Run this command to pin ${host_ip} static on '${active_conn}':"
+        echo -e "  ${C_YELLOW}sudo nmcli connection modify \"${active_conn}\" ipv4.addresses \"${host_ip}/24\" ipv4.gateway \"${gw}\" ipv4.dns \"1.1.1.1,8.8.8.8\" ipv4.method manual && sudo nmcli connection up \"${active_conn}\"${C_RESET}"
+        echo -e "  ${C_DIM}(Revert back to dynamic DHCP anytime: sudo nmcli connection modify \"${active_conn}\" ipv4.method auto && sudo nmcli connection up \"${active_conn}\")${C_RESET}"
+    fi
+    echo -e "${C_BOLD}${C_BLUE}══════════════════════════════════════════════════════════${C_RESET}"
+    echo ""
+}
+
 cmd_switch() {
     if [ -f "$INSTALL_DIR/scripts/switch_monitor.sh" ]; then
         "$INSTALL_DIR/scripts/switch_monitor.sh"
@@ -307,6 +358,9 @@ case "${1:-}" in
     usb)
         shift || true
         cmd_usb "$@"
+        ;;
+    ip|url|qr|link)
+        cmd_ip
         ;;
     stop|off|disable|kill)
         cmd_stop
@@ -331,11 +385,12 @@ case "${1:-}" in
         cmd_switch
         ;;
     *)
-        echo -e "${C_BOLD}Usage:${C_RESET} linuxextend <command> (or ${C_BOLD}linuxextended${C_RESET})"
+        echo -e "${C_BOLD}Usage:${C_RESET} linuxextend <command> (shortcuts: ${C_BOLD}le${C_RESET} or ${C_BOLD}linuxextended${C_RESET})"
         echo ""
-        echo -e "  ${C_GREEN}usb${C_RESET}           ${C_BOLD}Start & configure USB mode (No Wi-Fi / Bluetooth needed)${C_RESET}"
+        echo -e "  ${C_GREEN}ip${C_RESET} | ${C_GREEN}url${C_RESET} | ${C_GREEN}qr${C_RESET}   ${C_BOLD}Show connection links, QR code, and static IP command${C_RESET}"
         echo -e "  ${C_GREEN}portrait${C_RESET}      Start server in portrait mode on the left"
-        echo -e "  ${C_GREEN}start${C_RESET} | ${C_GREEN}on${C_RESET}     Start server with custom options (e.g. linuxextend start --portrait)"
+        echo -e "  ${C_GREEN}usb${C_RESET}           Start & configure USB mode (No Wi-Fi / Bluetooth needed)"
+        echo -e "  ${C_GREEN}start${C_RESET} | ${C_GREEN}on${C_RESET}     Start server with custom options"
         echo -e "  ${C_RED}stop${C_RESET}  | ${C_RED}off${C_RESET}    Stop server, clean up socket & remove virtual display"
         echo -e "  ${C_CYAN}status${C_RESET}        Show server, monitor, and tablet connection status"
         echo -e "  ${C_YELLOW}restart${C_RESET}       Restart LinuxExtend server"
@@ -343,5 +398,6 @@ case "${1:-}" in
         echo -e "  ${C_BLUE}logs${C_RESET}          Follow server logs in real time"
         echo -e "  ${C_BLUE}switch${C_RESET}        Jump mouse cursor between laptop & tablet"
         echo ""
+        cmd_ip
         ;;
 esac
