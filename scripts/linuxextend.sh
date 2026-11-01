@@ -5,7 +5,8 @@
 
 set -eo pipefail
 
-INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_PATH")")"
 LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/linuxextend"
 LOG_FILE="$LOG_DIR/server.log"
 PID_FILE="$LOG_DIR/server.pid"
@@ -166,7 +167,7 @@ cmd_start() {
     done
 
     # Setup USB port forwarding if tablet is plugged in
-    setup_usb
+    setup_usb || true
 
     local host_ip
     host_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' || echo "127.0.0.1")

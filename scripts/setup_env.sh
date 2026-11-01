@@ -18,7 +18,8 @@ else
 fi
 
 # 3. Check Python dependencies
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$(dirname "$SCRIPT_PATH")")"
 echo "📦 Installing server Python dependencies..."
 python3 -m pip install -r "$SCRIPT_DIR/server/requirements.txt"
 
