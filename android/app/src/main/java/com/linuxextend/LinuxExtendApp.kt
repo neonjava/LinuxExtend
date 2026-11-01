@@ -13,11 +13,17 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 @Composable
-fun LinuxExtendApp() {
+fun LinuxExtendApp(initialWsUrl: String? = null) {
     LinuxExtendTheme {
         val navController = rememberNavController()
+        val startDestination = if (!initialWsUrl.isNullOrEmpty()) {
+            val encoded = URLEncoder.encode(initialWsUrl, "UTF-8")
+            "display/$encoded"
+        } else {
+            "connect"
+        }
 
-        NavHost(navController = navController, startDestination = "connect") {
+        NavHost(navController = navController, startDestination = startDestination) {
             composable("connect") {
                 ConnectScreen(
                     onConnect = { wsUrl ->

@@ -26,6 +26,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -58,39 +59,39 @@ fun ConnectScreen(onConnect: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val discovery = remember { ServerDiscovery(context) }
     val servers = remember { mutableStateListOf<DiscoveredServer>() }
-    var isSearching by remember { mutableStateOf(true) }
+    var isSearching by remember { mutableStateOf(false) }
 
-    var ipAddress by remember { mutableStateOf("192.168.1.") }
+    var ipAddress by remember { mutableStateOf("127.0.0.1") }
     var port by remember { mutableStateOf("8080") }
-    var usbMode by remember { mutableStateOf(false) }
+    var usbMode by remember { mutableStateOf(true) }
+    var showAdvancedWifi by remember { mutableStateOf(false) }
 
-    // Start mDNS discovery
-    DisposableEffect(Unit) {
-        val job = scope.launch {
-            try {
-                discovery.discover().collect { server ->
-                    // Avoid duplicates
-                    if (servers.none { it.host == server.host && it.port == server.port }) {
-                        servers.add(server)
+    // Start mDNS discovery only when advanced WiFi mode is enabled
+    DisposableEffect(showAdvancedWifi) {
+        if (showAdvancedWifi) {
+            isSearching = true
+            val job = scope.launch {
+                try {
+                    discovery.discover().collect { server ->
+                        if (servers.none { it.host == server.host && it.port == server.port }) {
+                            servers.add(server)
+                        }
                     }
+                } catch (_: Exception) {
+                    isSearching = false
                 }
-            } catch (_: Exception) {
+            }
+            onDispose {
+                job.cancel()
                 isSearching = false
             }
+        } else {
+            onDispose {}
         }
-        onDispose {
-            job.cancel()
-            isSearching = false
-        }
-    }
-
-    // Update IP when USB mode toggled
-    if (usbMode) {
-        ipAddress = "127.0.0.1"
     }
 
     fun buildWsUrl(): String {
-        val host = ipAddress.trim()
+        val host = if (usbMode) "127.0.0.1" else ipAddress.trim()
         val p = port.trim().ifEmpty { "8080" }
         return "ws://$host:$p/ws/screen"
     }
@@ -106,7 +107,7 @@ fun ConnectScreen(onConnect: (String) -> Unit) {
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Left side: Branding
+            // Left side: Branding & Instructions
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -126,13 +127,21 @@ fun ConnectScreen(onConnect: (String) -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Second Monitor",
+                    text = "USB Second Monitor (No Wi-Fi)",
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Plug in USB cable and tap Connect below.\nZero latency. No Wi-Fi or Bluetooth required.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp,
                 )
             }
 
-            // Right side: Connection
+            // Right side: Connection Actions
             Column(
                 modifier = Modifier
                     .weight(1.5f)
@@ -140,148 +149,113 @@ fun ConnectScreen(onConnect: (String) -> Unit) {
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(24.dp),
             ) {
-                // Discovered servers section
+                // USB Priority Action
                 Text(
-                    text = "Discovered Servers",
+                    text = "🔌 Direct USB Connection",
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Spacer(Modifier.height(8.dp))
-
-                if (servers.isEmpty()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    ) {
-                        if (isSearching) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = "Searching on network...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            Text(
-                                text = "No servers found",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.height(120.dp),
-                    ) {
-                        items(servers) { server ->
-                            ServerItem(
-                                server = server,
-                                onClick = {
-                                    val wsUrl = "ws://${server.host.hostAddress}:${server.port}/ws/screen"
-                                    onConnect(wsUrl)
-                                },
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                Spacer(Modifier.height(12.dp))
-
-                // Manual connection section
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Manual Connection",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = "Connects directly through ADB reverse port forwarding (127.0.0.1:8080)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    OutlinedTextField(
-                        value = ipAddress,
-                        onValueChange = { ipAddress = it },
-                        label = { Text("IP Address") },
-                        singleLine = true,
-                        enabled = !usbMode,
-                        modifier = Modifier.weight(2f),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next,
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                        ),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedTextField(
-                        value = port,
-                        onValueChange = { port = it },
-                        label = { Text("Port") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { onConnect(buildWsUrl()) },
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                        ),
-                    )
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { usbMode = !usbMode }
-                        .padding(vertical = 4.dp),
-                ) {
-                    Checkbox(
-                        checked = usbMode,
-                        onCheckedChange = { usbMode = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    )
-                    Text(
-                        text = "USB Mode (localhost)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
 
                 Button(
-                    onClick = { onConnect(buildWsUrl()) },
+                    onClick = { onConnect("ws://127.0.0.1:8080/ws/screen") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(10.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                 ) {
                     Text(
-                        text = "Connect",
-                        fontWeight = FontWeight.SemiBold,
+                        text = "⚡ Connect via USB (1-Tap)",
+                        fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
                     )
+                }
+
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(12.dp))
+
+                // Optional / Advanced Wi-Fi Toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAdvancedWifi = !showAdvancedWifi }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = if (showAdvancedWifi) "▼ Hide Wi-Fi Settings" else "▶ Wi-Fi / Custom IP (Optional)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
+                if (showAdvancedWifi) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedTextField(
+                            value = ipAddress,
+                            onValueChange = { 
+                                ipAddress = it 
+                                usbMode = false
+                            },
+                            label = { Text("IP Address") },
+                            singleLine = true,
+                            modifier = Modifier.weight(2f),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Next,
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedTextField(
+                            value = port,
+                            onValueChange = { port = it },
+                            label = { Text("Port") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { onConnect(buildWsUrl()) },
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            ),
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = { onConnect(buildWsUrl()) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Text("Connect to Custom IP")
+                    }
                 }
             }
         }

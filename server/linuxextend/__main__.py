@@ -58,10 +58,10 @@ def _setup_logging(verbose: bool = False) -> None:
 
 def _setup_usb(port: int) -> None:
     """Set up ADB reverse port forwarding for USB connection."""
-    adb_path = os.path.expanduser("~/Android/Sdk/platform-tools/adb")
-    if not os.path.exists(adb_path):
-        # Try system adb
-        adb_path = "adb"
+    adb_path = shutil.which("adb")
+    if not adb_path:
+        sdk_adb = os.path.expanduser("~/Android/Sdk/platform-tools/adb")
+        adb_path = sdk_adb if os.path.exists(sdk_adb) else "adb"
 
     print(f"{_CYAN}📱 Setting up USB port forwarding...{_RESET}")
     try:
@@ -258,8 +258,7 @@ def main() -> None:
         server_module.server_start_time = time.time()
 
         # Print connection info
-        adb_path = os.path.expanduser("~/Android/Sdk/platform-tools/adb")
-        adb_cmd = f"{adb_path} reverse tcp:{config.port} tcp:{config.port}"
+        adb_cmd = f"adb reverse tcp:{config.port} tcp:{config.port}"
 
         print(f"""
 {_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{_RESET}

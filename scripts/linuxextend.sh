@@ -60,24 +60,61 @@ cleanup_displays() {
 }
 
 setup_usb() {
-    if [ -n "$ADB_BIN" ] && [ -x "$ADB_BIN" ]; then
-        local device_count
-        device_count=$("$ADB_BIN" devices 2>/dev/null | grep -v "List" | grep -c "device$" || true)
-        if [ "$device_count" -gt 0 ]; then
-            echo -e "  ${C_CYAN}Setting up ADB reverse port forwarding (8080)...${C_RESET}"
-            "$ADB_BIN" reverse tcp:8080 tcp:8080 >/dev/null 2>&1 || true
-            echo -e "  ${C_GREEN}✓ USB ADB reverse active${C_RESET}"
-            
-            # Launch on tablet: native app if installed, otherwise browser
-            if "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.linuxextend"; then
-                echo -e "  ${C_CYAN}Launching LinuxExtend on tablet...${C_RESET}"
-                "$ADB_BIN" shell am start -n com.linuxextend/.MainActivity >/dev/null 2>&1 || true
-            elif "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.android.chrome"; then
-                echo -e "  ${C_CYAN}Launching stream in Chrome on tablet...${C_RESET}"
-                "$ADB_BIN" shell am start -n com.android.chrome/com.google.android.apps.chrome.Main -d "http://127.0.0.1:8080" >/dev/null 2>&1 || true
-            fi
+    if [ -z "$ADB_BIN" ] || [ ! -x "$ADB_BIN" ]; then
+        ADB_BIN="$(command -v adb 2>/dev/null || echo "${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb")"
+    fi
+
+    if [ ! -x "$ADB_BIN" ]; then
+        echo -e "  ${C_RED}❌ ADB not found.${C_RESET} Please ensure Android platform-tools (adb) is in PATH or ANDROID_HOME."
+        return 1
+    fi
+
+    local dev_raw
+    dev_raw=$("$ADB_BIN" devices 2>/dev/null | grep -v "List of devices" | grep -v '^$' || true)
+
+    if [ -z "$dev_raw" ]; then
+        echo -e "  ${C_RED}❌ No Android device detected over USB.${C_RESET}"
+        echo -e "  ${C_BOLD}To connect your tablet via USB (No Wi-Fi / Bluetooth needed):${C_RESET}"
+        echo -e "   1. Connect tablet to PC with USB cable."
+        echo -e "   2. Tablet Settings → Developer Options → Enable ${C_YELLOW}USB Debugging${C_RESET}."
+        echo -e "   3. Accept the ${C_YELLOW}'Allow USB debugging?'${C_RESET} prompt on tablet."
+        echo -e "   4. Ensure USB notification is ${C_CYAN}'File Transfer'${C_RESET} (not 'Charging only')."
+        echo -e "   5. Run: ${C_GREEN}linuxextend usb${C_RESET}"
+        return 1
+    fi
+
+    if echo "$dev_raw" | grep -q "unauthorized"; then
+        echo -e "  ${C_YELLOW}⚠️ Tablet connected but UNAUTHORIZED in ADB.${C_RESET}"
+        echo -e "  Please unlock your tablet screen and tap ${C_BOLD}'Always allow from this computer'${C_RESET} → ${C_GREEN}'Allow'${C_RESET}."
+        return 1
+    fi
+
+    local dev_name
+    dev_name=$(echo "$dev_raw" | grep "device$" | head -1 | awk '{print $1}')
+    echo -e "  ${C_GREEN}✓ Android tablet detected:${C_RESET} ${dev_name}"
+
+    echo -e "  ${C_CYAN}Setting up ADB reverse port forwarding (8080)...${C_RESET}"
+    "$ADB_BIN" reverse tcp:8080 tcp:8080 >/dev/null 2>&1 || true
+    echo -e "  ${C_GREEN}✓ USB ADB reverse active${C_RESET} (tablet localhost:8080 → laptop:8080)"
+
+    # If app not installed, install newly built APK
+    local apk="$INSTALL_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+    if ! "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.linuxextend"; then
+        if [ -f "$apk" ]; then
+            echo -e "  ${C_CYAN}Installing LinuxExtend APK on tablet...${C_RESET}"
+            "$ADB_BIN" install -r "$apk" >/dev/null 2>&1 || true
         fi
     fi
+
+    # Launch app directly into stream
+    if "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.linuxextend"; then
+        echo -e "  ${C_CYAN}Launching LinuxExtend on tablet in USB mode...${C_RESET}"
+        "$ADB_BIN" shell am start -n com.linuxextend/.MainActivity -e ws_url "ws://127.0.0.1:8080/ws/screen" >/dev/null 2>&1 || true
+    elif "$ADB_BIN" shell pm list packages 2>/dev/null | grep -q "com.android.chrome"; then
+        echo -e "  ${C_CYAN}Launching USB stream in Chrome on tablet...${C_RESET}"
+        "$ADB_BIN" shell am start -n com.android.chrome/com.google.android.apps.chrome.Main -d "http://127.0.0.1:8080" >/dev/null 2>&1 || true
+    fi
+    return 0
 }
 
 cmd_start() {
@@ -234,7 +271,12 @@ cmd_status() {
 }
 
 cmd_usb() {
-    echo -e "${C_BOLD}Setting up USB Mode for Tablet...${C_RESET}"
+    echo -e "${C_BOLD}${C_BLUE}Configuring USB Mode (No Wi-Fi / No Bluetooth)...${C_RESET}"
+    if ! is_running; then
+        echo -e "  ${C_CYAN}Server not running. Starting in portrait USB mode...${C_RESET}"
+        cmd_start --portrait "$@"
+        return
+    fi
     setup_usb
 }
 
@@ -257,6 +299,14 @@ case "${1:-}" in
         shift || true
         cmd_start "$@"
         ;;
+    portrait)
+        shift || true
+        cmd_start --portrait "$@"
+        ;;
+    usb)
+        shift || true
+        cmd_usb "$@"
+        ;;
     stop|off|disable|kill)
         cmd_stop
         ;;
@@ -269,8 +319,9 @@ case "${1:-}" in
     status)
         cmd_status
         ;;
-    usb)
-        cmd_usb
+    install)
+        shift || true
+        "$INSTALL_DIR/scripts/install_apk.sh" "$@"
         ;;
     logs|log)
         cmd_logs
@@ -279,13 +330,15 @@ case "${1:-}" in
         cmd_switch
         ;;
     *)
-        echo -e "${C_BOLD}Usage:${C_RESET} linuxextend <command>"
+        echo -e "${C_BOLD}Usage:${C_RESET} linuxextend <command> (or ${C_BOLD}linuxextended${C_RESET})"
         echo ""
-        echo -e "  ${C_GREEN}start${C_RESET} | ${C_GREEN}on${C_RESET}     Start second monitor server and configure tablet"
+        echo -e "  ${C_GREEN}usb${C_RESET}           ${C_BOLD}Start & configure USB mode (No Wi-Fi / Bluetooth needed)${C_RESET}"
+        echo -e "  ${C_GREEN}portrait${C_RESET}      Start server in portrait mode on the left"
+        echo -e "  ${C_GREEN}start${C_RESET} | ${C_GREEN}on${C_RESET}     Start server with custom options (e.g. linuxextend start --portrait)"
         echo -e "  ${C_RED}stop${C_RESET}  | ${C_RED}off${C_RESET}    Stop server, clean up socket & remove virtual display"
         echo -e "  ${C_CYAN}status${C_RESET}        Show server, monitor, and tablet connection status"
         echo -e "  ${C_YELLOW}restart${C_RESET}       Restart LinuxExtend server"
-        echo -e "  ${C_BLUE}usb${C_RESET}           Re-apply USB port forwarding & launch app on tablet"
+        echo -e "  ${C_BLUE}install${C_RESET}       Build & install native Android APK to tablet"
         echo -e "  ${C_BLUE}logs${C_RESET}          Follow server logs in real time"
         echo -e "  ${C_BLUE}switch${C_RESET}        Jump mouse cursor between laptop & tablet"
         echo ""
